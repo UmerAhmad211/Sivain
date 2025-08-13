@@ -1,0 +1,8 @@
+(ocamllex lexer)
+(menhir 
+  (modules parser))
+
+(executable
+ (name      svc)
+ (modules ast parser lexer svc cgen)
+ (libraries unix))
