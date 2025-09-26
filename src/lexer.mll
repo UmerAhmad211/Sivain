@@ -18,6 +18,9 @@ let int = '-'? digit+
 let ident = ( alpha ) ( alpha|digit|'_' )*
 let whitespace = [ ' ' '\t' ]+
 let newline = '\r' | '\n' | "\r\n"
+let frac = '.' digit*
+let exp = ['e' 'E'] ['-' '+']? digit+
+let float = digit* frac? exp?
 
 rule read_token = parse
     | whitespace    { read_token lexbuf }
@@ -27,10 +30,33 @@ rule read_token = parse
     | '{'           { LBRACE }
     | '}'           { RBRACE }
     | ';'           { SEMI_C }
+    | ':'           { COLON }
+    | ','           { COMMA }
+    | '='           { EQUAL }
+    | '<'           { LES }
+    | '>'           { GRT }
+    | '+'           { ADD }
+    | '*'           { MUL }
+    | '-'           { SUB }
+    | '/'           { DIV }
+    | '%'           { MOD }
+    | '!'           { NOT }
+    | '~'           { TIL }
+    | "<="          { LESE }
+    | ">="          { GRTE }
+    | "!="          { NEQ }
+    | "&&"          { AND }
+    | "||"          { OR }
     | "fun"         { FUNC }
     | "int"         { INT_KW }
+    | "void"        { VOID_KW }
+    | "float"       { FLOAT_KW }
     | "ret"         { RET }
+    | "if"          { IF }
+    | "else"        { ELSE }
+    | "while"       { WHILE }
     | int           { INTLIT (int_of_string (Lexing.lexeme lexbuf)) }
+    | float         { FLOATLIT (float_of_string (Lexing.lexeme lexbuf)) }
     | ident         { ID (Lexing.lexeme lexbuf) }
     | newline       { next_line lexbuf; read_token lexbuf }
     | eof           { EOF }
