@@ -1,0 +1,6 @@
+bar : int = 9;
+
+fun foo() int {
+	baz : int = bar;
+	ret baz;
+}
