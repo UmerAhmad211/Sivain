@@ -1,21 +1,27 @@
 open Ast
 
-(* let roc = ref (open_out "") *)
-
 let ret_dtype = function
   | Dint -> "w"
   | Dvoid -> ""
+  | Dfloat -> "s"
 
 let string_of_expr = function
-  | Int i -> string_of_int i
+  | Int (_, i) -> string_of_int i
+  | Float (_, f) -> string_of_float f
+  | _ -> ""
 
-let emit_stmt oc = function
-  | Ret None -> Printf.fprintf oc "ret"
-  | Ret (Some r) -> Printf.fprintf oc "ret %s" (string_of_expr r)
+let emit_stmt oc stmt =
+  match stmt with
+  | Ret (_, ex) -> (
+      match ex with
+      | None -> Printf.fprintf oc "ret"
+      | Some e -> Printf.fprintf oc "ret %s" (string_of_expr e))
+  | _ -> ()
 
 let emit_func oc func =
-  Printf.fprintf oc "export function %s $%s() {\n" func.name
-    (ret_dtype func.ret_type);
+  let _, fname = func.name in
+  let _, rt = func.ret_type in
+  Printf.fprintf oc "export function %s $%s() {\n" (ret_dtype rt) fname;
   Printf.fprintf oc "@start\n";
   List.iter
     (fun line ->
@@ -33,6 +39,6 @@ let emit_gvar oc gvar =
 
 let emitter_driver oc = function
   | Funcs f -> emit_func oc f
-  | Global_Vars (id, dt, e_opt) -> emit_gvar oc (id, dt, e_opt)
+  | Global_Vars (_, id, dt, e_opt) -> emit_gvar oc (id, dt, e_opt)
 
 let emit_program oc (ast : prog) = List.iter (emitter_driver oc) ast
