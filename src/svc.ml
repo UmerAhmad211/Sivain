@@ -46,13 +46,18 @@ let () =
   let ast =
     try Parser.program Lexer.read_token lexbuf
     with Parser.Error ->
-      Printf.eprintf "Syntax error at %d:%d\n" lexbuf.lex_curr_p.pos_lnum
+      Printf.eprintf "Sivain: Error: Syntax error at %d:%d\n"
+        lexbuf.lex_curr_p.pos_lnum
         (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol);
       exit 1
   in
   close_in ic;
-
-  check_for_main ast
+  check_for_main ast;
+  match check_prog ast with
+  | Ok () -> ()
+  | Error (msg, pos) ->
+      Printf.eprintf "Sivain: Error: %s at %d:%d.\n" msg pos.pos_lnum
+        (pos.pos_cnum - pos.pos_bol)
 
 (* let oc = open_out "temp.ssa" in *)
 (* Cgen.emit_program oc ast; *)
