@@ -21,10 +21,13 @@ open Ast
 %token INT_KW VOID_KW FLOAT_KW
 %token RET IF ELSE WHILE
 %token EOF
-%right EQUAL
+
+%nonassoc EQUAL NEQ
+%nonassoc LES LESE GRT GRTE
 %left ADD SUB
 %left MUL DIV MOD
-%nonassoc NOT
+%left OR AND
+%nonassoc NOT TIL
 
 
 %start program 
@@ -54,14 +57,19 @@ let pparams :=
 let param == 
     | id = ID; COLON; pdt = dt; { ( id, pdt, $startpos ) } 
 
+let block := 
+    | LBRACE; RBRACE; { [] }
+    | LBRACE; s = separated_nonempty_list(SEMI_C, stmts); RBRACE; { s }
+
 let stmts := 
     | RET; e = option(expr); SEMI_C; { Ret ($startpos, e) } 
     | e = expr; SEMI_C; { Expr ($startpos, e) }
-    | id = ID; COLON; t = dt; option(EQUAL); e = option(expr); SEMI_C; { Decl ($startpos, id, t, e) }
-    | IF; LPAREN; ce = expr; RPAREN; LBRACE; s = separated_list(SEMI_C, stmts); RBRACE; option(ELSE); option(LBRACE); se = option(separated_list(SEMI_C, stmts)); option(RBRACE);
-        { If ($startpos, ce, s, se) }
-    | WHILE; LPAREN; e = expr; RPAREN; LBRACE; s = separated_list(SEMI_C, stmts); RBRACE; { While($startpos, e, s) }
-    | LBRACE; s = separated_list(SEMI_C, stmts); RBRACE; { Block($startpos, s) }
+    | id = ID; COLON; t = dt; e = option(EQUAL; e = expr; { e }); SEMI_C; { Decl ($startpos, id, t, e) }
+    | IF; LPAREN; ce = expr; RPAREN; ib = block; eb = option(ELSE; eb = block; { eb });
+        { If ($startpos, ce, ib, eb) }
+    | WHILE; LPAREN; e = expr; RPAREN; wb = block; { While($startpos, e, wb) }
+    | b = block; { Block($startpos, b) }
+
 
 let expr := 
     | i = INTLIT; { Int ($startpos, i) }
