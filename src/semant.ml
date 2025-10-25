@@ -8,7 +8,7 @@ let check_binop binop el er =
   | (Eq | Neq | Les | Grt | Grte | Lese), (Dint | Dfloat), (Dint | Dfloat) ->
       Ok Dint
   | (And | Or), (Dint | Dfloat), (Dint | Dfloat) -> Ok Dint
-  | _ -> Error "Invalid type for binary operation."
+  | _ -> Error "Invalid type for binary operation"
 
 let rec check_expr e env : (dtype, string * pos) result =
   match e with
@@ -31,7 +31,7 @@ let rec check_expr e env : (dtype, string * pos) result =
           | Error e -> Error (e, pos))
       | Ok _, Error e -> Error e
       | Error e, Ok _ -> Error e
-      | Error _, Error _ -> Error ("Invalid type for binary operation.", pos))
+      | Error _, Error _ -> Error ("Invalid type for binary operation", pos))
   | Uop (pos, up, ex) -> (
       let et = check_expr ex env in
       match et with
@@ -39,7 +39,7 @@ let rec check_expr e env : (dtype, string * pos) result =
           match (up, cet) with
           | (Not | Neg | Til), Dint -> Ok Dint
           | (Not | Neg | Til), Dfloat -> Ok Dfloat
-          | _ -> Error ("Invalid type for uniary operation.", pos))
+          | _ -> Error ("Invalid type for uniary operation", pos))
       | Error (er, p) -> Error (er, p))
   | Call (pos, fname, exs) ->
       if Funcs.mem env.fns fname then
@@ -56,7 +56,7 @@ let rec check_expr e env : (dtype, string * pos) result =
                   else
                     check_args_type rparams rexs
               | Error (er, p) -> Error (er, p))
-          | _ -> Error ("Different argument count.", pos)
+          | _ -> Error ("Different argument count", pos)
         in
         check_args_type params exs
       else
@@ -67,10 +67,10 @@ let rec check_expr e env : (dtype, string * pos) result =
       match (elt, ert) with
       | Ok tl, Ok tr ->
           if tl <> tr then
-            Error ("Different assignment types.", pos)
+            Error ("Different assignment types", pos)
           else
             Ok tl
-      | _ -> Error ("Assignment type check error.", pos))
+      | _ -> Error ("Assignment type check error", pos))
 
 let rec check_stmts stmt env fdt : (unit, string * pos) result =
   match stmt with
@@ -78,7 +78,7 @@ let rec check_stmts stmt env fdt : (unit, string * pos) result =
       match ex with
       | None ->
           if fdt <> Dvoid then
-            Error ("Missing return value.", pos)
+            Error ("Missing return value", pos)
           else
             Ok ()
       | Some e -> (
@@ -87,7 +87,7 @@ let rec check_stmts stmt env fdt : (unit, string * pos) result =
               if dt <> fdt then
                 Error
                   ( "Return statment has different return type then defined in \
-                     the function.",
+                     the function",
                     pos )
               else
                 Ok ()
@@ -96,18 +96,20 @@ let rec check_stmts stmt env fdt : (unit, string * pos) result =
       match check_expr ex env with
       | Error (e, _) -> Error (e, pos)
       | _ -> Ok ())
-  (* missing pushing the declaration in scope and pushing out when the func ends *)
-  | Decl (pos, _, decl_type, ex) -> (
-      match ex with
-      | None -> Ok ()
-      | Some e -> (
-          match check_expr e env with
-          | Ok dt ->
-              if dt <> decl_type then
-                Error ("Type mismatch in assignment in declaration.", pos)
-              else
-                Ok ()
-          | Error (e, p) -> Error (e, p)))
+  | Decl (pos, dname, decl_type, ex) -> (
+      match Vars.add env.vars dname decl_type with
+      | Error msg -> Error (msg, pos)
+      | Ok _ -> (
+          match ex with
+          | None -> Ok ()
+          | Some e -> (
+              match check_expr e env with
+              | Ok dt ->
+                  if dt <> decl_type then
+                    Error ("Type mismatch in assignment in declaration", pos)
+                  else
+                    Ok ()
+              | Error (e, p) -> Error (e, p))))
   | If (pos, ex, stmtl, stmtlo) -> (
       match check_expr ex env with
       | Error (e, p) -> Error (e, p)
@@ -115,13 +117,18 @@ let rec check_stmts stmt env fdt : (unit, string * pos) result =
           if dt = Dvoid then
             Error ("If condition does not take type void", pos)
           else
-            let res = check_stmt_list stmtl env fdt in
+            let if_scope = { env with vars = Vars.push_scope env.vars } in
+            let res = check_stmt_list stmtl if_scope fdt in
             match stmtlo with
             | None -> res
             | Some sl -> (
                 match res with
                 | Error (e, p) -> Error (e, p)
-                | Ok () -> check_stmt_list sl env fdt)))
+                | Ok () ->
+                    let else_scope =
+                      { env with vars = Vars.push_scope env.vars }
+                    in
+                    check_stmt_list sl else_scope fdt)))
   | While (pos, ex, stmtl) -> (
       match check_expr ex env with
       | Error (e, p) -> Error (e, p)
@@ -129,12 +136,14 @@ let rec check_stmts stmt env fdt : (unit, string * pos) result =
           if dt = Dvoid then
             Error ("While condition does not take type void", pos)
           else
-            let res = check_stmt_list stmtl env fdt in
+            let while_scope = { env with vars = Vars.push_scope env.vars } in
+            let res = check_stmt_list stmtl while_scope fdt in
             match res with
             | Error (e, p) -> Error (e, p)
             | Ok () -> Ok ()))
   | Block (pos, stmtl) -> (
-      match check_stmt_list stmtl env fdt with
+      let block_scope = { env with vars = Vars.push_scope env.vars } in
+      match check_stmt_list stmtl block_scope fdt with
       | Error (e, _) -> Error (e, pos)
       | Ok () -> Ok ())
 
@@ -146,9 +155,50 @@ and check_stmt_list stmtl env fdt =
       | Ok () -> check_stmt_list stmr env fdt
       | Error (e, p) -> Error (e, p))
 
-(* let check_prog prog = *)
-(*   let env = creat_env () in *)
-(*   List.iter (fun decls ->  *)
-(*     match decls with  *)
-(*     | Global_Vars *)
-(*   ) prog *)
+let check_prog prog =
+  let env = creat_env () in
+
+  let rec check_top_level env decls =
+    match decls with
+    | [] -> Ok ()
+    | Global_Vars (pos, name, dt, expr_opt) :: rest -> (
+        match expr_opt with
+        | None -> (
+            match Vars.add env.vars name dt with
+            | Ok _ -> check_top_level env rest
+            | Error msg -> Error (msg, pos))
+        | Some e -> (
+            match check_expr e env with
+            | Error (e, p) -> Error (e, p)
+            | Ok et -> (
+                if et <> dt then
+                  Error ("Global variable type mismatch", pos)
+                else
+                  match Vars.add env.vars name dt with
+                  | Ok _ -> check_top_level env rest
+                  | Error msg -> Error (msg, pos))))
+    | Funcs f :: rest -> (
+        let npos, fname = f.name in
+        let _, rdt = f.ret_type in
+        let params = List.map (fun (np, pdt, _) -> (np, pdt)) f.params in
+        match Funcs.add env.fns fname rdt params with
+        | Error msg -> Error (msg, npos)
+        | Ok _ -> (
+            let local_env = { env with vars = Vars.push_scope env.vars } in
+
+            let rec add_params_to_lscope env = function
+              | [] -> Ok env
+              | (pname, pdt, ppos) :: rest -> (
+                  match Vars.add env.vars pname pdt with
+                  | Error msg -> Error (msg, ppos)
+                  | Ok _ -> add_params_to_lscope env rest)
+            in
+
+            match add_params_to_lscope local_env f.params with
+            | Error e -> Error e
+            | Ok env_params -> (
+                match check_stmt_list f.body env_params rdt with
+                | Error e -> Error e
+                | Ok () -> check_top_level env rest)))
+  in
+  check_top_level env prog
