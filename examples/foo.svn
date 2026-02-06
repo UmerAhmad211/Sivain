@@ -1,6 +1,15 @@
 bar : int = 9;
+fun bar() int {
+	ret 5 + 8;
+}
 
-fun foo() int {
+fun main() int {
+	umer : int = 9*2+7;
+	umer = umer + 9;
 	baz : int = bar;
+	if (baz == 9) {
+		tmp : int = 9;
+	}
+	tm : int = bar();
 	ret baz;
 }
