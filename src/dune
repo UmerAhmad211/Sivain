@@ -4,5 +4,5 @@
 
 (executable
  (name      svc)
- (modules ast parser lexer svc cgen util semant symb_table)
- (libraries unix))
+ (modules ast parser lexer svc cgen util semant symb_table parsed_ast)
+ (libraries unix cmdliner))

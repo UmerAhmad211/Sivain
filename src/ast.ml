@@ -1,9 +1,5 @@
 type pos = Lexing.position
-
-type dtype =
-  | Dint
-  | Dvoid
-  | Dfloat
+type dtype = Dint | Dvoid | Dfloat
 
 type binop =
   | Eq
@@ -20,10 +16,7 @@ type binop =
   | And
   | Or
 
-type uop =
-  | Not
-  | Neg
-  | Til
+type uop = Not | Neg | Til
 
 type expr =
   | Int of pos * int
