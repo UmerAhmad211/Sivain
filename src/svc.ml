@@ -1,32 +1,30 @@
 open Util
 open Semant
+open Parsed_ast
 
 let usage_msg =
   "Usage: svc [--target=<amd64_sysv|arm64|rv64>] <file1> -o <output>"
 
 let input_file = ref ""
-let build_dir = ".siv-build"
+
+(* let build_dir = ".siv-build" *)
 let output_file = ref ""
 let target_arch = ref "amd64_sysv"
 let valid_target = [ "amd64"; "arm64"; "riscv64" ]
 
-let run_comm comm args =
-  let pid = Unix.create_process comm args Unix.stdin Unix.stderr Unix.stdout in
-  let _, status = Unix.waitpid [] pid in
-  match status with
-  | Unix.WEXITED 0 -> ()
-  | _ -> failwith (comm ^ "failed.")
+(* let run_comm comm args = *)
+(*   let pid = Unix.create_process comm args Unix.stdin Unix.stderr Unix.stdout in *)
+(*   let _, status = Unix.waitpid [] pid in *)
+(*   match status with Unix.WEXITED 0 -> () | _ -> failwith (comm ^ "failed.") *)
 
 let anon_fun filename =
-  if !input_file = "" then
-    input_file := filename
+  if !input_file = "" then input_file := filename
   else
     print_err_usage_fail ~usage:usage_msg
       "Sivain: Error: Only one file expected."
 
 let check_target tg =
-  if List.mem tg valid_target then
-    target_arch := tg
+  if List.mem tg valid_target then target_arch := tg
   else
     print_err_usage_fail ~usage:usage_msg
       ("Sivain: Error: Invalid target architecture: " ^ tg)
@@ -61,25 +59,24 @@ let () =
   in
   close_in ic;
   check_for_main ast;
-  (match check_prog ast with
-  | Ok () -> ()
+  match check_prog ast with
+  | Ok past -> print_parsed_prog (List.rev past)
   | Error (msg, pos) ->
       Printf.eprintf "Sivain: Error: %s at %d:%d.\n" msg pos.pos_lnum
         (pos.pos_cnum - pos.pos_bol);
-      exit 1);
+      exit 1
 
-  if not (Sys.file_exists build_dir) then
-    Unix.mkdir build_dir 0o755;
+(* if not (Sys.file_exists build_dir) then Unix.mkdir build_dir 0o755; *)
 
-  let ssa_fname =
-    (build_dir ^ "/"
-    ^ (!input_file |> Filename.basename |> Filename.remove_extension))
-    ^ ".ssa"
-  in
-  let asm_fname = build_dir ^ "/" ^ !output_file ^ ".s" in
-  let oc = open_out ssa_fname in
-  Cgen.emit_program oc ast;
-  flush oc;
-  close_out oc;
-  run_comm "qbe" [| "qbe"; ssa_fname; "-t"; !target_arch; "-o"; asm_fname |];
-  run_comm "cc" [| "cc"; asm_fname; "-o"; !output_file |]
+(* let ssa_fname = *)
+(*   (build_dir ^ "/" *)
+(*   ^ (!input_file |> Filename.basename |> Filename.remove_extension)) *)
+(*   ^ ".ssa" *)
+(* in *)
+(* let asm_fname = build_dir ^ "/" ^ !output_file ^ ".s" in *)
+(* let oc = open_out ssa_fname in *)
+(* Cgen.emit_program oc ast; *)
+(* flush oc; *)
+(* close_out oc; *)
+(* run_comm "qbe" [| "qbe"; ssa_fname; "-t"; !target_arch; "-o"; asm_fname |]; *)
+(* run_comm "cc" [| "cc"; asm_fname; "-o"; !output_file |] *)
