@@ -1,6 +1,7 @@
 open Util
 open Semant
 open Parsed_ast
+open Cgen
 
 let usage_msg =
   "Usage: svc [--target=<amd64_sysv|arm64|rv64>] <file1> -o <output>"
@@ -37,6 +38,13 @@ let speclist =
     ("-o", Arg.Set_string output_file, "Set output file name");
   ]
 
+(* let rec print_scopes = function *)
+(*   | [] -> () *)
+(*   | scope :: rest -> *)
+(*       Hashtbl.iter (fun name _ -> print_endline name) scope; *)
+(*       print_endline "---"; *)
+(*       print_scopes rest *)
+
 let () =
   Arg.parse speclist anon_fun usage_msg;
   if !input_file = "" then
@@ -60,7 +68,10 @@ let () =
   close_in ic;
   check_for_main ast;
   match check_prog ast with
-  | Ok past -> print_parsed_prog (List.rev past)
+  | Ok past ->
+      let fixed_past = List.rev past in
+      print_parsed_ast fixed_past;
+      emitter_driver fixed_past
   | Error (msg, pos) ->
       Printf.eprintf "Sivain: Error: %s at %d:%d.\n" msg pos.pos_lnum
         (pos.pos_cnum - pos.pos_bol);
