@@ -1,30 +1,30 @@
 open Ast
+open Symb_table
 
-type parsed_expr = { e : expr; ty : dtype }
+type scope = Vars.t
 
 type parsed_stmt =
-  | PRet of pos * parsed_expr option
-  | PExpr of pos * parsed_expr
-  | PDecl of pos * string * dtype * parsed_expr option
-  | PIf of pos * parsed_expr * parsed_stmt list * parsed_stmt list option
-  | PWhile of pos * parsed_expr * parsed_stmt list
-  | PBlock of pos * parsed_stmt list
+  | PRet of expr option
+  | PExpr of expr
+  | PDecl of string * dtype * expr option
+  | PIf of expr * block_scope * block_scope option
+  | PWhile of expr * block_scope
+  | PBlock of block_scope
+
+and block_scope = { bscope : scope; stmts : parsed_stmt list }
 
 type parsed_func = {
-  pname : pos * string;
-  pparams : (string * dtype * pos) list;
-  pret_type : pos * dtype;
-  pbody : parsed_stmt list;
+  pname : string;
+  pparams : (string * dtype) list;
+  pret_type : dtype;
+  pbody : block_scope;
 }
 
 type parsed_top_level_decls =
   | PFuncs of parsed_func
-  | PGlobal_Vars of pos * string * dtype * parsed_expr option
+  | PGlobal_Vars of string * dtype * expr option
 
 type parsed_prog = parsed_top_level_decls list
-
-let indent n = String.make (2 * n) ' '
-let opt f = function None -> "None" | Some x -> f x
 
 let string_of_binop = function
   | Eq -> "=="
@@ -43,83 +43,64 @@ let string_of_binop = function
 
 let string_of_uop = function Not -> "!" | Neg -> "-" | Til -> "~"
 
-let string_of_dtype = function
+let rec string_of_expr = function
+  | Int (_, i) -> string_of_int i
+  | Float (_, f) -> string_of_float f
+  | Id_name (_, id) -> id
+  | Uop (_, op, e) ->
+      Printf.sprintf "(%s %s)" (string_of_uop op) (string_of_expr e)
+  | Binop (_, op, l, r) ->
+      Printf.sprintf "(%s %s %s)" (string_of_expr l) (string_of_binop op)
+        (string_of_expr r)
+  | Call (_, name, args) ->
+      Printf.sprintf "%s(%s)" name
+        (String.concat ", " (List.map string_of_expr args))
+  | Assign (_, l, r) ->
+      Printf.sprintf "(%s = %s)" (string_of_expr l) (string_of_expr r)
+
+let rec string_of_stmt = function
+  | PRet None -> "return;"
+  | PRet (Some e) -> "return " ^ string_of_expr e ^ ";"
+  | PExpr e -> string_of_expr e ^ ";"
+  | PDecl (name, dt, None) ->
+      Printf.sprintf "%s : %s;" name (string_of_dtype dt)
+  | PDecl (name, dt, Some e) ->
+      Printf.sprintf "%s : %s = %s;" name (string_of_dtype dt)
+        (string_of_expr e)
+  | PIf (cond, then_s, None) ->
+      Printf.sprintf "if (%s) %s" (string_of_expr cond) (string_of_block then_s)
+  | PIf (cond, then_s, Some else_s) ->
+      Printf.sprintf "if (%s) %s else %s" (string_of_expr cond)
+        (string_of_block then_s) (string_of_block else_s)
+  | PWhile (cond, body) ->
+      Printf.sprintf "while (%s) %s" (string_of_expr cond)
+        (string_of_block body)
+  | PBlock stmts -> string_of_block stmts
+
+and string_of_block stmts =
+  "{\n" ^ String.concat "\n" (List.map string_of_stmt stmts.stmts) ^ "\n}"
+
+and string_of_dtype = function
   | Dint -> "int"
   | Dfloat -> "float"
   | Dvoid -> "void"
 
-let rec string_of_expr = function
-  | Int (_, i) -> string_of_int i
-  | Float (_, f) -> string_of_float f
-  | Id_name (_, s) -> s
-  | Binop (_, op, e1, e2) ->
-      Printf.sprintf "(%s %s %s)" (string_of_expr e1) (string_of_binop op)
-        (string_of_expr e2)
-  | Uop (_, op, e) ->
-      Printf.sprintf "(%s%s)" (string_of_uop op) (string_of_expr e)
-  | Call (_, name, args) ->
-      Printf.sprintf "%s(%s)" name
-        (String.concat ", " (List.map string_of_expr args))
-  | Assign (_, lhs, rhs) ->
-      Printf.sprintf "(%s = %s)" (string_of_expr lhs) (string_of_expr rhs)
-
-let string_of_parsed_expr pe =
-  Printf.sprintf "%s : %s" (string_of_expr pe.e) (string_of_dtype pe.ty)
-
-let rec string_of_parsed_stmt lvl = function
-  | PRet (_, None) -> indent lvl ^ "return;"
-  | PRet (_, Some pe) -> indent lvl ^ "ret " ^ string_of_parsed_expr pe ^ ";"
-  | PExpr (_, pe) -> indent lvl ^ string_of_parsed_expr pe ^ ";"
-  | PDecl (_, name, ty, init) ->
-      indent lvl
-      ^ Printf.sprintf "%s : %s%s;" name (string_of_dtype ty)
-          (match init with
-          | None -> ""
-          | Some pe -> " = " ^ string_of_parsed_expr pe)
-  | PIf (_, cond, then_blk, else_blk) ->
-      let then_part =
-        String.concat "\n" (List.map (string_of_parsed_stmt (lvl + 1)) then_blk)
-      in
-      let else_part =
-        match else_blk with
-        | None -> ""
-        | Some blk ->
-            "\n" ^ indent lvl ^ "else {\n"
-            ^ String.concat "\n"
-                (List.map (string_of_parsed_stmt (lvl + 1)) blk)
-            ^ "\n" ^ indent lvl ^ "}"
-      in
-      indent lvl ^ "if (" ^ string_of_parsed_expr cond ^ ") {\n" ^ then_part
-      ^ "\n" ^ indent lvl ^ "}" ^ else_part
-  | PWhile (_, cond, body) ->
-      indent lvl ^ "while (" ^ string_of_parsed_expr cond ^ ") {\n"
-      ^ String.concat "\n" (List.map (string_of_parsed_stmt (lvl + 1)) body)
-      ^ "\n" ^ indent lvl ^ "}"
-  | PBlock (_, stmts) ->
-      indent lvl ^ "{\n"
-      ^ String.concat "\n" (List.map (string_of_parsed_stmt (lvl + 1)) stmts)
-      ^ "\n" ^ indent lvl ^ "}"
-
-let string_of_param (name, ty, _) =
+let string_of_param (name, ty) =
   Printf.sprintf "%s : %s" name (string_of_dtype ty)
 
-let string_of_parsed_func f =
-  let params = String.concat ", " (List.map string_of_param f.pparams) in
-  let body = String.concat "\n" (List.map (string_of_parsed_stmt 1) f.pbody) in
-  let _, name = f.pname in
-  let _, ret_ty = f.pret_type in
-  Printf.sprintf "func %s(%s) : %s {\n%s\n}" name params
-    (string_of_dtype ret_ty) body
+let string_of_func (f : parsed_func) =
+  Printf.sprintf "func %s(%s) : %s %s" f.pname
+    (String.concat ", " (List.map string_of_param f.pparams))
+    (string_of_dtype f.pret_type)
+    (string_of_block f.pbody)
 
-let string_of_top_level = function
-  | PFuncs f -> string_of_parsed_func f
-  | PGlobal_Vars (_, name, ty, init) ->
-      Printf.sprintf "global %s : %s%s;" name (string_of_dtype ty)
-        (match init with
-        | None -> ""
-        | Some pe -> " = " ^ string_of_parsed_expr pe)
+let string_of_top = function
+  | PFuncs f -> string_of_func f
+  | PGlobal_Vars (name, dt, None) ->
+      Printf.sprintf "global %s : %s;" name (string_of_dtype dt)
+  | PGlobal_Vars (name, dt, Some e) ->
+      Printf.sprintf "global %s : %s = %s;" name (string_of_dtype dt)
+        (string_of_expr e)
 
-let string_of_parsed_prog prog =
-  String.concat "\n\n" (List.map string_of_top_level prog)
-
-let print_parsed_prog prog = print_endline (string_of_parsed_prog prog)
+let print_parsed_ast p =
+  print_endline (String.concat "\n\n" (List.map string_of_top p))
