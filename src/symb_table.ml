@@ -1,8 +1,6 @@
 open Ast
 
-type var_type =
-  | Gvars
-  | Lvars
+type var_type = Gvars | Lvars
 
 module Vars = struct
   type t = (string, dtype * var_type) Hashtbl.t list
@@ -16,17 +14,14 @@ module Vars = struct
     | scope :: _ ->
         if Hashtbl.mem scope name then
           Error ("Duplicate variable in scope: " ^ name)
-        else
-          Ok (Hashtbl.add scope name (dt, vt))
+        else Ok (Hashtbl.add scope name (dt, vt))
 
   let rec find (env : t) (name : string) =
     match env with
     | [] -> Error ("Undeclared variable: " ^ name)
     | scope :: rest ->
-        if Hashtbl.mem scope name then
-          Ok (Hashtbl.find scope name)
-        else
-          find rest name
+        if Hashtbl.mem scope name then Ok (Hashtbl.find scope name)
+        else find rest name
 
   let rec mem (env : t) (name : string) : bool =
     match env with
@@ -41,10 +36,8 @@ module Funcs = struct
 
   let add (env : t) (name : string) (rdt : dtype)
       (params : (string * dtype) list) =
-    if Hashtbl.mem env name then
-      Error ("Duplicate Function name " ^ name)
-    else
-      Ok (Hashtbl.add env name (rdt, params))
+    if Hashtbl.mem env name then Error ("Duplicate Function name " ^ name)
+    else Ok (Hashtbl.add env name (rdt, params))
 
   let find (env : t) (name : string) : dtype * (string * dtype) list =
     Hashtbl.find env name
@@ -52,9 +45,6 @@ module Funcs = struct
   let mem (env : t) (name : string) : bool = Hashtbl.mem env name
 end
 
-type env = {
-  vars : Vars.t;
-  fns : Funcs.t;
-}
+type env = { vars : Vars.t; fns : Funcs.t }
 
 let creat_env () = { vars = Vars.create (); fns = Funcs.create () }
