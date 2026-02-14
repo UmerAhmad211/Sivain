@@ -70,9 +70,9 @@ let rec check_expr e env : (dtype, string * pos) result =
       | _ -> Error ("Assignment type check error", pos))
 
 (*
-  checks statements,
-  returns types attached to expressions in statements so as to
-  avoid type checking in code generation
+  @brief: checks statements,
+  returns a parsed AST which has some
+  information stripped for code generation
  *)
 let rec check_stmts stmt env fdt : (parsed_stmt, string * pos) result =
   match stmt with
@@ -80,7 +80,7 @@ let rec check_stmts stmt env fdt : (parsed_stmt, string * pos) result =
       match ex with
       | None ->
           if fdt <> Dvoid then Error ("Missing return value", pos)
-          else Ok (PRet (pos, None))
+          else Ok (PRet None)
       | Some e -> (
           match check_expr e env with
           | Ok dt ->
@@ -89,12 +89,12 @@ let rec check_stmts stmt env fdt : (parsed_stmt, string * pos) result =
                   ( "Return statment has different return type then defined in \
                      the function",
                     pos )
-              else Ok (PRet (pos, Some { e; ty = dt }))
+              else Ok (PRet (Some e))
           | Error (e, p) -> Error (e, p)))
   | Expr (pos, ex) -> (
       match check_expr ex env with
       | Error (e, _) -> Error (e, pos)
-      | Ok dt -> Ok (PExpr (pos, { e = ex; ty = dt })))
+      | Ok _ -> Ok (PExpr ex))
   | Decl (pos, dname, decl_type, ex) -> (
       if decl_type = Dvoid then Error ("Void data type not allowed", pos)
       else
@@ -102,13 +102,13 @@ let rec check_stmts stmt env fdt : (parsed_stmt, string * pos) result =
         | Error msg -> Error (msg, pos)
         | Ok _ -> (
             match ex with
-            | None -> Ok (PDecl (pos, dname, decl_type, None))
+            | None -> Ok (PDecl (dname, decl_type, None))
             | Some e -> (
                 match check_expr e env with
                 | Ok dt ->
                     if dt <> decl_type then
                       Error ("Type mismatch in assignment in declaration", pos)
-                    else Ok (PDecl (pos, dname, decl_type, Some { e; ty = dt }))
+                    else Ok (PDecl (dname, decl_type, Some e))
                 | Error (e, p) -> Error (e, p))))
   | If (pos, ex, stmtl, stmtlo) -> (
       match check_expr ex env with
@@ -122,7 +122,9 @@ let rec check_stmts stmt env fdt : (parsed_stmt, string * pos) result =
             | None -> (
                 match res with
                 | Error (e, p) -> Error (e, p)
-                | Ok psl -> Ok (PIf (pos, { e = ex; ty = dt }, psl, None)))
+                | Ok psl ->
+                    Ok (PIf (ex, { bscope = if_scope.vars; stmts = psl }, None))
+                )
             | Some sl -> (
                 match res with
                 | Error (e, p) -> Error (e, p)
@@ -134,7 +136,12 @@ let rec check_stmts stmt env fdt : (parsed_stmt, string * pos) result =
                     match ptsl with
                     | Error (e, p) -> Error (e, p)
                     | Ok elpsl ->
-                        Ok (PIf (pos, { e = ex; ty = dt }, psl, Some elpsl))))))
+                        Ok
+                          (PIf
+                             ( ex,
+                               { bscope = else_scope.vars; stmts = psl },
+                               Some { bscope = else_scope.vars; stmts = elpsl }
+                             ))))))
   | While (pos, ex, stmtl) -> (
       match check_expr ex env with
       | Error (e, p) -> Error (e, p)
@@ -146,12 +153,13 @@ let rec check_stmts stmt env fdt : (parsed_stmt, string * pos) result =
             let res = check_stmt_list stmtl while_scope fdt in
             match res with
             | Error (e, p) -> Error (e, p)
-            | Ok psl -> Ok (PWhile (pos, { e = ex; ty = dt }, psl))))
+            | Ok psl ->
+                Ok (PWhile (ex, { bscope = while_scope.vars; stmts = psl }))))
   | Block (pos, stmtl) -> (
       let block_scope = { env with vars = Vars.push_scope env.vars } in
       match check_stmt_list stmtl block_scope fdt with
       | Error (e, _) -> Error (e, pos)
-      | Ok psl -> Ok (PBlock (pos, psl)))
+      | Ok psl -> Ok (PBlock { bscope = block_scope.vars; stmts = psl }))
 
 and check_stmt_list stmtl env fdt : (parsed_stmt list, string * pos) result =
   match stmtl with
@@ -176,7 +184,7 @@ let check_prog prog =
         | None -> (
             match Vars.add env.vars name dt Gvars with
             | Ok _ ->
-                let pgvar = PGlobal_Vars (pos, name, dt, None) in
+                let pgvar = PGlobal_Vars (name, dt, None) in
                 let nlist = pgvar :: tast in
                 check_top_level env rest nlist
             | Error msg -> Error (msg, pos))
@@ -188,9 +196,7 @@ let check_prog prog =
                 else
                   match Vars.add env.vars name dt Gvars with
                   | Ok _ ->
-                      let pgvar =
-                        PGlobal_Vars (pos, name, dt, Some { e; ty = dt })
-                      in
+                      let pgvar = PGlobal_Vars (name, dt, Some e) in
                       let nlist = pgvar :: tast in
                       check_top_level env rest nlist
                   | Error msg -> Error (msg, pos))))
@@ -220,10 +226,10 @@ let check_prog prog =
                     let pfunc =
                       PFuncs
                         {
-                          pname = f.name;
-                          pparams = f.params;
-                          pret_type = f.ret_type;
-                          pbody = psl;
+                          pname = fname;
+                          pparams = params;
+                          pret_type = rdt;
+                          pbody = { bscope = local_env.vars; stmts = psl };
                         }
                     in
                     let nlist = pfunc :: tast in
