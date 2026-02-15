@@ -9,3 +9,4 @@ Must have QBE installed and in path.
 Install Cmdliner using the command ```opam install cmdliner```.
 Type ```dune build```.
 View manpage by typing ```dune exec -- src/svc.exe --help```. Follow the instructions in the manpage to compile the code.
+Compiler creates a hidden directory by the name of ```.siv-build``` which contains temporary files emitted during the compiler pipeline.
