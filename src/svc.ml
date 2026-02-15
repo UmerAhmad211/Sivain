@@ -64,7 +64,10 @@ let compile ~target ~file ~output =
            exit 1)
 
 let target =
-  let doc = "Target architecture: $(docv) (default: System Architecture)." in
+  let doc =
+    "Target architecture: $(docv) (Available: Amd64 Sys-V, ARM64 and RV64. \
+     Defaults to system architecture)."
+  in
   let targ_enum = Arg.enum valid_targets in
   Arg.(
     value & opt targ_enum Amd64_sysv
