@@ -17,7 +17,7 @@ let make_label () =
   incr label_id;
   Printf.sprintf "@L%d" !label_id
 
-let rec emit_exp ids_map env = function
+let rec emit_exp ?(dt = "") ids_map env = function
   | Int (_, i) ->
       let t = make_tmp () in
       emit "%s =w copy %d\n" t i;
@@ -42,10 +42,9 @@ let rec emit_exp ids_map env = function
           let allocd_name = Hashtbl.find ids_map name in
           match Vars.find env name with
           | Error e -> failwith ("Abort : Backend error : Assign : " ^ e)
-          | Ok (idt, ivt) ->
+          | Ok (idt, _) ->
               let rdt = ret_dtype idt in
-              let rvt = ret_vtype ivt in
-              emit "store%s %s, %s%s\n" rdt r rvt allocd_name;
+              emit "store%s %s, %s\n" rdt r allocd_name;
               (r, ret))
       | _ -> failwith "Abort: Backend error : Assign.")
   | Binop (_, bop, e1, e2) -> (
@@ -217,11 +216,11 @@ let rec emit_exp ids_map env = function
             (t1, ret)))
   | Call (_, fname, args) ->
       let args_t = List.map (fun e -> emit_exp ids_map env e) args in
-      let fty = match args_t with (_, ty) :: _ -> ty | [] -> "" in
       let t = make_tmp () in
-      emit "%s =%s call $%s(%s)\n" t fty fname
-        (String.concat ", " (List.map (fun (arg, _) -> fty ^ " " ^ arg) args_t));
-      (t, fty)
+      emit "%s =%s call $%s(%s)\n" t dt fname
+        (String.concat ", "
+           (List.map (fun (arg, pty) -> pty ^ " " ^ arg) args_t));
+      (t, dt)
 
 let ret_align_size = function
   | Dint -> 4
@@ -263,7 +262,7 @@ let rec emit_stmts ids_map env = function
       let end_l = make_label () in
       emit "jnz %s, %s, %s\n" r if_l else_l;
       emit "%s\n" if_l;
-      List.iter (emit_stmts if_local_map env) if_stmts.stmts;
+      List.iter (emit_stmts if_local_map if_stmts.bscope) if_stmts.stmts;
       emit "jmp %s\n" end_l;
       emit "%s\n" else_l;
       Option.iter
@@ -293,7 +292,7 @@ let rec emit_stmts ids_map env = function
           Hashtbl.add ids_map name t;
           Option.iter
             (fun e ->
-              let r, ret = emit_exp ids_map env e in
+              let r, ret = emit_exp ~dt:(ret_dtype dt) ids_map env e in
               emit "store%s %s, %s\n" ret r t)
             eopt)
   | PBlock stmts ->
