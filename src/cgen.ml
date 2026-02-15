@@ -326,4 +326,4 @@ let emit_program =
 
 let emitter_driver past =
   List.iter emit_program past;
-  print_endline (Buffer.contents qbe_buf)
+  Buffer.contents qbe_buf
