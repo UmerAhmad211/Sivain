@@ -21,9 +21,11 @@ let run_comm comm args =
   let _, status = Unix.waitpid [] pid in
   match status with Unix.WEXITED 0 -> () | _ -> failwith (comm ^ "failed.")
 
-let compile ~target ~file ~output =
+let compile ~target ~cc ~file ~output =
   if not (check_filename_exe file) then
     `Error (true, file ^ ": Sivain files end with .svn.")
+  else if not (Sys.file_exists file) then
+    `Error (true, file ^ " no such file exists.")
   else
     `Ok
       (let ic = open_in file in
@@ -57,11 +59,15 @@ let compile ~target ~file ~output =
            flush oc;
            close_out oc;
            run_comm "qbe" [| "qbe"; ssa_fname; "-t"; target; "-o"; asm_fname |];
-           run_comm "cc" [| "cc"; asm_fname; "-o"; output |]
+           run_comm cc [| cc; asm_fname; "-o"; output |]
        | Error (msg, pos) ->
            Printf.eprintf "Sivain: Error: %s at %d:%d.\n" msg pos.pos_lnum
              (pos.pos_cnum - pos.pos_bol);
            exit 1)
+
+let cc =
+  let doc = "C compiler to compile code to target architecture." in
+  Arg.(value & opt string "cc" & info [ "cc" ] ~doc ~docv:"CC")
 
 let target =
   let doc =
@@ -92,8 +98,8 @@ let svn_cmd =
   Cmd.make (Cmd.info "svc" ~version:"0.0.1" ~doc ~man)
   @@ Term.ret
   @@
-  let+ target = target and+ file = file and+ output = output in
-  compile ~target:(string_of_target target) ~file ~output
+  let+ target = target and+ cc = cc and+ file = file and+ output = output in
+  compile ~target:(string_of_target target) ~cc ~file ~output
 
 let main () = Cmd.eval svn_cmd
 let () = if !Sys.interactive then () else exit (main ())
