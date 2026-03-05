@@ -1,6 +1,6 @@
 open Util
 open Semant
-open Cgen
+open Qbe_gen
 open Cmdliner
 open Cmdliner.Term.Syntax
 
@@ -46,6 +46,7 @@ let compile ~target ~cc ~file ~output =
        match check_prog ast with
        | Ok past ->
            let fixed_past = List.rev past in
+           Llvm_gen.emitter_driver fixed_past;
            let cgened = emitter_driver fixed_past in
            if not (Sys.file_exists build_dir) then Unix.mkdir build_dir 0o755;
            let ssa_fname =
