@@ -58,8 +58,7 @@ let param ==
     | id = ID; COLON; pdt = dt; { ( id, pdt, $startpos ) } 
 
 let block := 
-    | LBRACE; RBRACE; { [] }
-    | LBRACE; s = separated_nonempty_list(SEMI_C, stmts); RBRACE; { s }
+    | LBRACE; s = list(stmts); RBRACE; { s }
 
 let stmts := 
     | RET; e = option(expr); SEMI_C; { Ret ($startpos, e) } 
