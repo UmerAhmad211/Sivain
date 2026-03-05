@@ -1,3 +1,9 @@
+fun foo(a : int, b : int) int {
+	ret a + b;
+}
+
 fun main() int {
-	ret 9;
+	tm : int = 9;
+	umer : int = foo(tm, 9);
+	ret umer;
 }
