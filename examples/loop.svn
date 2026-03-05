@@ -1,0 +1,10 @@
+bar : int;	
+
+fun main() int {
+	im : int = 10;
+	while (im > 0) {
+		bar = bar + 1;
+		im = im - 1;
+	}
+	ret bar;
+}
