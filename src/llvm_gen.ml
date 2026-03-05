@@ -61,7 +61,7 @@ let rec emit_exp named_values frt (env : scope) = function
       let args' = Array.map (emit_exp named_values frt env) args_arr in
       let args_ty = Array.map type_of args' in
       let fnty = function_type frt args_ty in
-      build_call fnty callee args' "" builder'
+      build_call fnty callee args' "calltmp" builder'
   | Binop (_, bop, e1, e2) -> (
       let r1 = emit_exp named_values frt env e1 in
       let te = type_of r1 in
@@ -140,7 +140,16 @@ let rec emit_exp named_values frt (env : scope) = function
           let curr_fn = block_parent curr_point in
           let right = append_block ctxt "r_bb" curr_fn in
           let join = append_block ctxt "join_bb" curr_fn in
-          ignore (build_cond_br r1 right join builder');
+          let te = type_of r1 in
+          let bool_r1 =
+            if te = int_ty then
+              build_icmp Icmp.Ne r1 (const_int int_ty 0) "boolcond" builder'
+            else
+              build_fcmp Fcmp.One r1
+                (const_float double_ty 0.0)
+                "boolcond" builder'
+          in
+          ignore (build_cond_br bool_r1 right join builder');
           position_at_end right builder';
           let r2 = emit_exp named_values frt env e2 in
           ignore (build_br join builder');
@@ -165,7 +174,16 @@ let rec emit_exp named_values frt (env : scope) = function
           let curr_fn = block_parent curr_point in
           let right = append_block ctxt "r_bb" curr_fn in
           let join = append_block ctxt "join_bb" curr_fn in
-          ignore (build_cond_br r1 join right builder');
+          let te = type_of r1 in
+          let bool_r1 =
+            if te = int_ty then
+              build_icmp Icmp.Ne r1 (const_int int_ty 0) "boolcond" builder'
+            else
+              build_fcmp Fcmp.One r1
+                (const_float double_ty 0.0)
+                "boolcond" builder'
+          in
+          ignore (build_cond_br bool_r1 join right builder');
           position_at_end right builder';
           let r2 = emit_exp named_values frt env e2 in
           ignore (build_br join builder');
@@ -206,11 +224,11 @@ let rec emit_exp named_values frt (env : scope) = function
             let val' = build_not casted_double "tiltmp" builder' in
             build_sitofp val' int_ty "itod" builder')
 
-let emit_stmts named_values frt env = function
-  | PRet None -> build_ret_void builder'
+let rec emit_stmts named_values frt env = function
+  | PRet None -> ignore (build_ret_void builder')
   | PRet (Some e) ->
       let v = emit_exp named_values frt env e in
-      build_ret v builder'
+      ignore (build_ret v builder')
   | PDecl (name, dt, eopt) -> (
       match Vars.find env name with
       | Error e -> failwith ("Abort : Backend error : PDECL : " ^ e)
@@ -220,13 +238,63 @@ let emit_stmts named_values frt env = function
           let alloca = create_alloca function' name rdt in
           Hashtbl.add named_values name alloca;
           match eopt with
-          | None -> alloca
+          | None -> ()
           | Some e ->
               let v = emit_exp named_values (ret_lltype dt) env e in
-              ignore (build_store v alloca builder');
-              alloca))
-  | PExpr e -> emit_exp named_values frt env e
-  | _ -> failwith ""
+              ignore (build_store v alloca builder')))
+  | PExpr e -> ignore (emit_exp named_values frt env e)
+  | PIf (if_e, if_stmts, else_stmts) ->
+      let if_local_map = Hashtbl.copy named_values in
+      let curr_point = insertion_block builder' in
+      let curr_fn = block_parent curr_point in
+      let if_true = append_block ctxt "if_true" curr_fn in
+      let if_false = append_block ctxt "if_false" curr_fn in
+      let if_exit = append_block ctxt "if_exit" curr_fn in
+
+      let r = emit_exp if_local_map frt env if_e in
+      let te = type_of r in
+      let bool_r =
+        if te = int_ty then
+          build_icmp Icmp.Ne r (const_int int_ty 0) "ifcond" builder'
+        else build_fcmp Fcmp.One r (const_float double_ty 0.0) "ifcond" builder'
+      in
+      ignore (build_cond_br bool_r if_true if_false builder');
+      position_at_end if_true builder';
+      List.iter (emit_stmts if_local_map frt if_stmts.bscope) if_stmts.stmts;
+      ignore (build_br if_exit builder');
+      position_at_end if_false builder';
+      Option.iter
+        (fun block ->
+          List.iter (emit_stmts if_local_map frt block.bscope) block.stmts)
+        else_stmts;
+      ignore (build_br if_exit builder');
+      position_at_end if_exit builder'
+  | PWhile (e, stmts) ->
+      let while_local_map = Hashtbl.copy named_values in
+      let curr_point = insertion_block builder' in
+      let curr_fn = block_parent curr_point in
+      let while_cond = append_block ctxt "while_cond" curr_fn in
+      let while_body = append_block ctxt "while_body" curr_fn in
+      let while_exit = append_block ctxt "while_exit" curr_fn in
+
+      ignore (build_br while_cond builder');
+      position_at_end while_cond builder';
+
+      let r = emit_exp while_local_map frt env e in
+      let te = type_of r in
+      let bool_r1 =
+        if te = int_ty then
+          build_icmp Icmp.Ne r (const_int int_ty 0) "ifcond" builder'
+        else build_fcmp Fcmp.One r (const_float double_ty 0.0) "ifcond" builder'
+      in
+      ignore (build_cond_br bool_r1 while_body while_exit builder');
+      position_at_end while_body builder';
+      List.iter (emit_stmts while_local_map frt stmts.bscope) stmts.stmts;
+      ignore (build_br while_cond builder');
+      position_at_end while_exit builder'
+  | PBlock stmts ->
+      let block_local_scope = Hashtbl.copy named_values in
+      List.iter (emit_stmts block_local_scope frt stmts.bscope) stmts.stmts
 
 let emit_func named_values_all f =
   let named_values = Hashtbl.copy named_values_all in
@@ -251,7 +319,7 @@ let emit_func named_values_all f =
     (params fn_def);
 
   List.iter
-    (fun stmt -> ignore (emit_stmts named_values ret_ty f.pbody.bscope stmt))
+    (fun stmt -> emit_stmts named_values ret_ty f.pbody.bscope stmt)
     f.pbody.stmts
 
 let ret_constants = function
@@ -281,5 +349,7 @@ let emit_program =
 
 let emitter_driver past =
   List.iter emit_program past;
-  dump_module module';
-  print_module "o.ll" module'
+  (match Llvm_analysis.verify_module module' with
+  | Some output -> print_endline output
+  | None -> ());
+  string_of_llmodule module'
