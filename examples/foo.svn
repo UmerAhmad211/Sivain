@@ -1,5 +1,5 @@
 bar : int = 9;
-fun bar_m() int {
+fun bar() int {
 	ret 5 + 8;
 }
 
@@ -10,6 +10,6 @@ fun main() int {
 	if (baz == 9) {
 		tmp : int = 9;
 	}
-	tm : int = bar_m();
-	ret baz;
+	tm : int = bar();
+	ret umer;
 }
