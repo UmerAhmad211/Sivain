@@ -1,27 +1,9 @@
 open Util
 open Semant
-open Qbe_gen
 open Cmdliner
 open Cmdliner.Term.Syntax
 
-type target = Amd64_sysv | Arm64 | Rv64
-
-let valid_targets =
-  [ ("amd64_sysv", Amd64_sysv); ("arm64", Arm64); ("rv64", Rv64) ]
-
-let string_of_target = function
-  | Amd64_sysv -> "amd64_sysv"
-  | Arm64 -> "arm64"
-  | Rv64 -> "rv64"
-
-let build_dir = ".siv-build"
-
-let run_comm comm args =
-  let pid = Unix.create_process comm args Unix.stdin Unix.stderr Unix.stdout in
-  let _, status = Unix.waitpid [] pid in
-  match status with Unix.WEXITED 0 -> () | _ -> failwith (comm ^ "failed.")
-
-let compile ~target ~cc ~file ~output =
+let compile ~target ~cc ~file ~output ~backend =
   if not (check_filename_exe file) then
     `Error (true, file ^ ": Sivain files end with .svn.")
   else if not (Sys.file_exists file) then
@@ -46,21 +28,7 @@ let compile ~target ~cc ~file ~output =
        match check_prog ast with
        | Ok past ->
            let fixed_past = List.rev past in
-           Llvm_gen.emitter_driver fixed_past;
-           let cgened = emitter_driver fixed_past in
-           if not (Sys.file_exists build_dir) then Unix.mkdir build_dir 0o755;
-           let ssa_fname =
-             (build_dir ^ "/"
-             ^ (file |> Filename.basename |> Filename.remove_extension))
-             ^ ".ssa"
-           in
-           let asm_fname = build_dir ^ "/" ^ output ^ ".s" in
-           let oc = open_out ssa_fname in
-           output_string oc cgened;
-           flush oc;
-           close_out oc;
-           run_comm "qbe" [| "qbe"; ssa_fname; "-t"; target; "-o"; asm_fname |];
-           run_comm cc [| cc; asm_fname; "-o"; output |]
+           Cgen_driver.driver fixed_past target cc file output backend
        | Error (msg, pos) ->
            Printf.eprintf "Sivain: Error: %s at %d:%d.\n" msg pos.pos_lnum
              (pos.pos_cnum - pos.pos_bol);
@@ -69,6 +37,11 @@ let compile ~target ~cc ~file ~output =
 let cc =
   let doc = "C compiler to compile code to target architecture." in
   Arg.(value & opt string "cc" & info [ "cc" ] ~doc ~docv:"CC")
+
+let backend =
+  let doc = "Code generation backend to use. Available: QBE and LLVM." in
+  let backend_enum = Arg.enum valid_backends in
+  Arg.(value & opt backend_enum Qbe & info [ "backend" ] ~doc ~docv:"BACKEND")
 
 let target =
   let doc =
@@ -99,8 +72,12 @@ let svn_cmd =
   Cmd.make (Cmd.info "svc" ~version:"0.0.1" ~doc ~man)
   @@ Term.ret
   @@
-  let+ target = target and+ cc = cc and+ file = file and+ output = output in
-  compile ~target:(string_of_target target) ~cc ~file ~output
+  let+ target = target
+  and+ cc = cc
+  and+ file = file
+  and+ output = output
+  and+ backend = backend in
+  compile ~target ~cc ~file ~output ~backend
 
 let main () = Cmd.eval svn_cmd
 let () = if !Sys.interactive then () else exit (main ())
