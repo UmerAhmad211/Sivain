@@ -290,7 +290,9 @@ let rec emit_stmts ids_map ids_map_func env = function
       emit "%s\n" else_l;
       Option.iter
         (fun block ->
-          List.iter (emit_stmts if_local_map ids_map_func env) block.stmts)
+          List.iter
+            (emit_stmts if_local_map ids_map_func block.bscope)
+            block.stmts)
         else_stmts;
       emit "%s\n" end_l
   | PWhile (e, stmts) ->
