@@ -7,11 +7,11 @@ let check_for_main (prog : Ast.prog) =
          (function
            | Funcs f ->
                let _, fname = f.name in
-               fname = "main"
+               let _, dt = f.ret_type in
+               fname = "main" && dt = Dint
            | Global_Vars _ -> false)
          prog)
-  then
-    failwith "Sivain: Error: Linker expects symbol main."
+  then failwith "Sivain: Error: Linker expects symbol main."
 
 let print_err_usage_fail ?(usage = "") error_msg =
   prerr_endline error_msg;
