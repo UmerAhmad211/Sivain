@@ -172,6 +172,11 @@ and check_stmt_list stmtl env fdt : (parsed_stmt list, string * pos) result =
           | Ok prest -> Ok (pstmt :: prest))
       | Error (e, p) -> Error (e, p))
 
+let check_globals_expr = function
+  | Int _ -> Ok Dint
+  | Float _ -> Ok Dfloat
+  | _ -> Error "Global Vars only expects constants."
+
 let check_prog prog =
   let env = creat_env () in
   let past : parsed_prog = [] in
@@ -189,8 +194,8 @@ let check_prog prog =
                 check_top_level env rest nlist
             | Error msg -> Error (msg, pos))
         | Some e -> (
-            match check_expr e env with
-            | Error (e, p) -> Error (e, p)
+            match check_globals_expr e with
+            | Error e -> Error (e, pos)
             | Ok et -> (
                 if et <> dt then Error ("Global variable type mismatch", pos)
                 else
