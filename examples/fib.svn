@@ -1,0 +1,19 @@
+fun fib(n: int) int {
+    a: int = 0;
+    b: int = 1;
+    temp: int = 0;
+
+    i: int = 0;
+    while (i < n) {
+        temp = a + b;
+        a = b;
+        b = temp;
+        i = i + 1;
+    }
+
+    ret a;
+}
+
+fun main() int {
+    ret fib(10);
+}
