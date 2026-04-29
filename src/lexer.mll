@@ -55,6 +55,7 @@ rule read_token = parse
     | "if"          { IF }
     | "else"        { ELSE }
     | "while"       { WHILE }
+    | "print"	    { PRINT }
     | int           { INTLIT (int_of_string (Lexing.lexeme lexbuf)) }
     | float         { FLOATLIT (float_of_string (Lexing.lexeme lexbuf)) }
     | ident         { ID (Lexing.lexeme lexbuf) }
