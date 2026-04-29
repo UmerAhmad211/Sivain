@@ -29,12 +29,13 @@ let driver past target cc file output backend =
     let asm_fname = build_dir ^ "/" ^ output ^ ".s" in
     run_comm "qbe"
       [| "qbe"; ssa_fname; "-t"; string_of_target_qbe target; "-o"; asm_fname |];
-    run_comm cc [| cc; asm_fname; "-static"; "-o"; output |])
+    run_comm cc [| cc; asm_fname; "rt/print.c"; "-static"; "-o"; output |])
   else
     run_comm "clang"
       [|
         "clang";
         ssa_fname;
+        "rt/print.c";
         "-static";
         string_of_target_llvm target;
         "-o";
