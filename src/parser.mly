@@ -19,7 +19,7 @@ open Ast
 %token LESE GRTE NEQ AND OR
 %token FUNC
 %token INT_KW VOID_KW FLOAT_KW
-%token RET IF ELSE WHILE
+%token RET IF ELSE WHILE PRINT
 %token EOF
 
 %nonassoc EQUAL NEQ
@@ -68,6 +68,7 @@ let stmts :=
         { If ($startpos, ce, ib, eb) }
     | WHILE; LPAREN; e = expr; RPAREN; wb = block; { While($startpos, e, wb) }
     | b = block; { Block($startpos, b) }
+    | PRINT; LPAREN; e = expr; RPAREN; SEMI_C; { Print($startpos, e) }
 
 
 let expr := 
