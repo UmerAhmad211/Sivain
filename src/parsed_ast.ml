@@ -10,6 +10,7 @@ type parsed_stmt =
   | PIf of expr * block_scope * block_scope option
   | PWhile of expr * block_scope
   | PBlock of block_scope
+  | PPrint of expr
 
 and block_scope = { bscope : scope; stmts : parsed_stmt list }
 
@@ -76,6 +77,7 @@ let rec string_of_stmt = function
       Printf.sprintf "while (%s) %s" (string_of_expr cond)
         (string_of_block body)
   | PBlock stmts -> string_of_block stmts
+  | PPrint e -> Printf.sprintf "print " ^ string_of_expr e ^ ";"
 
 and string_of_block stmts =
   "{\n" ^ String.concat "\n" (List.map string_of_stmt stmts.stmts) ^ "\n}"
