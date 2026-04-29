@@ -160,6 +160,10 @@ let rec check_stmts stmt env fdt : (parsed_stmt, string * pos) result =
       match check_stmt_list stmtl block_scope fdt with
       | Error (e, _) -> Error (e, pos)
       | Ok psl -> Ok (PBlock { bscope = block_scope.vars; stmts = psl }))
+  | Print (pos, ex) -> (
+      match check_expr ex env with
+      | Error (e, _) -> Error (e, pos)
+      | Ok _ -> Ok (PPrint ex))
 
 and check_stmt_list stmtl env fdt : (parsed_stmt list, string * pos) result =
   match stmtl with
