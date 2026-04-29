@@ -281,9 +281,9 @@ let rec emit_stmts named_values frt env = function
       position_at_end while_cond builder';
 
       let r = emit_exp while_local_map frt env e in
-      let te = type_of r in
+      let t = type_of r in
       let bool_r1 =
-        if te = int_ty then
+        if t = int_ty then
           build_icmp Icmp.Ne r (const_int int_ty 0) "ifcond" builder'
         else build_fcmp Fcmp.One r (const_float double_ty 0.0) "ifcond" builder'
       in
@@ -295,6 +295,26 @@ let rec emit_stmts named_values frt env = function
   | PBlock stmts ->
       let block_local_scope = Hashtbl.copy named_values in
       List.iter (emit_stmts block_local_scope frt stmts.bscope) stmts.stmts
+  | PPrint e ->
+      let r = emit_exp named_values frt env e in
+      let arg_arr = Array.of_list [ r ] in
+      let t = type_of r in
+      let arg_arr_ty = Array.of_list [ t ] in
+      let fnty = function_type void_ty arg_arr_ty in
+      if t = int_ty then
+        let f' =
+          match lookup_function "print_int" module' with
+          | None -> declare_function "print_int" fnty module'
+          | Some f -> f
+        in
+        ignore (build_call fnty f' arg_arr "" builder')
+      else
+        let f' =
+          match lookup_function "print_float" module' with
+          | None -> declare_function "print_float" fnty module'
+          | Some f -> f
+        in
+        ignore (build_call fnty f' arg_arr "" builder')
 
 let emit_func named_values_all f =
   let named_values = Hashtbl.copy named_values_all in
