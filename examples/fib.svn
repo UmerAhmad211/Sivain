@@ -15,5 +15,7 @@ fun fib(n: int) int {
 }
 
 fun main() int {
-    ret fib(10);
+	r : int = fib(10);
+	print(r);
+    ret 0;
 }
