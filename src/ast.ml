@@ -34,6 +34,7 @@ type stmt =
   | If of pos * expr * stmt list * stmt list option
   | While of pos * expr * stmt list
   | Block of pos * stmt list
+  | Print of pos * expr
 
 type func = {
   name : pos * string;
