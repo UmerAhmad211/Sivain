@@ -329,6 +329,11 @@ let rec emit_stmts ids_map ids_map_func env = function
       let block_local_map = Hashtbl.copy ids_map in
       List.iter (emit_stmts block_local_map ids_map_func env) stmts.stmts
   | PExpr e -> ignore (emit_exp ids_map ids_map_func env e)
+  | PPrint e ->
+      let r, ret = emit_exp ids_map ids_map_func env e in
+      let t = make_tmp () in
+      if ret = "w" then emit "%s =w call $print_int(w %s)\n" t r
+      else emit "%s =d call $print_float(d %s)\n" t r
 
 let emit_func ids_map ids_map_func f =
   let func_local_map = Hashtbl.copy ids_map in
