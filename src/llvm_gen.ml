@@ -31,6 +31,10 @@ let create_alloca function' name ty =
   let builder'' = builder_at ctxt (instr_begin (entry_block function')) in
   build_alloca ty name builder''
 
+let build_br_if_need merge_p =
+  if block_terminator (insertion_block builder') |> Option.is_none then
+    ignore (build_br merge_p builder')
+
 let rec emit_exp named_values frt (env : scope) = function
   | Int (_, i) -> const_int int_ty i
   | Float (_, f) -> const_float double_ty f
@@ -122,7 +126,7 @@ let rec emit_exp named_values frt (env : scope) = function
       | Mul ->
           let r2 = emit_exp named_values frt env e2 in
           if te = int_ty then build_mul r1 r2 "multmp" builder'
-          else build_mul r1 r2 "fmultmp" builder'
+          else build_fmul r1 r2 "fmultmp" builder'
       | Sub ->
           let r2 = emit_exp named_values frt env e2 in
           if te = int_ty then build_sub r1 r2 "subtmp" builder'
@@ -261,13 +265,13 @@ let rec emit_stmts named_values frt env = function
       ignore (build_cond_br bool_r if_true if_false builder');
       position_at_end if_true builder';
       List.iter (emit_stmts if_local_map frt if_stmts.bscope) if_stmts.stmts;
-      ignore (build_br if_exit builder');
+      build_br_if_need if_exit;
       position_at_end if_false builder';
       Option.iter
         (fun block ->
           List.iter (emit_stmts if_local_map frt block.bscope) block.stmts)
         else_stmts;
-      ignore (build_br if_exit builder');
+      build_br_if_need if_exit;
       position_at_end if_exit builder'
   | PWhile (e, stmts) ->
       let while_local_map = Hashtbl.copy named_values in
